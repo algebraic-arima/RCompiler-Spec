@@ -77,6 +77,7 @@ expression
     | expression (LT | LE | EQEQ | NE | GE | GT) expression
     | expression (AND | CARET | OR) expression
     | expression (ANDAND | OROR) expression
+    | expression AS type
     | <assoc = right> expression (EQ | PLUSEQ | MINUSEQ | STAREQ | SLASHEQ | PERCENTEQ | CARETEQ | ANDEQ | OREQ | SHLEQ | SHREQ) expression
 // <<<<
     | LBKT array_elements? RBKT
@@ -98,6 +99,7 @@ expression_without_block
     : LPAR expression RPAR
 // >>>> operator_expression
     | <assoc = right> expression (EQ | PLUSEQ | MINUSEQ | STAREQ | SLASHEQ | PERCENTEQ | CARETEQ | ANDEQ | OREQ | SHLEQ | SHREQ) expression
+    | expression AS type
     | expression (ANDAND | OROR) expression
     | expression (AND | CARET | OR) expression
     | expression (LT | LE | EQEQ | NE | GE | GT) expression
