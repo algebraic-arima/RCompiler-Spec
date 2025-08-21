@@ -63,8 +63,10 @@ expression_statement: expression_without_block SEMI | expression_with_block SEMI
 
 expression
     : LPAR expression RPAR
+    | LPAR ((expression COMMA)+ expression?)? RPAR
     | expression DOT path_expr_segment LPAR call_params? RPAR
     | expression DOT IDENTIFIER
+    | expression DOT INTEGER_LITERAL
     | expression LBKT expression RBKT
     | expression LPAR call_params? RPAR
 // >>>> operator_expression
@@ -77,17 +79,54 @@ expression
     | expression (LT | LE | EQEQ | NE | GE | GT) expression
     | expression (AND | CARET | OR) expression
     | expression (ANDAND | OROR) expression
+    | expression DOTDOT expression
     | expression AS type
     | <assoc = right> expression (EQ | PLUSEQ | MINUSEQ | STAREQ | SLASHEQ | PERCENTEQ | CARETEQ | ANDEQ | OREQ | SHLEQ | SHREQ) expression
 // <<<<
     | LBKT array_elements? RBKT
     | path_in_expression LBCE struct_expr_fields? RBCE
-    | continue_expression
-    | break_expression
-    | return_expression
+    | CONTINUE
+    | BREAK expression?
+    | RETURN expression?
     | literal_expression
     | path_expression
-    | underscore_expression
+    | UNDERSCORE
+    | block_expression
+    | const_block_expression
+    | loop_expression
+    | if_expression
+    | match_expression
+    ;
+
+expression_without_struct
+    : LPAR expression_without_struct RPAR
+    | LPAR ((expression_without_struct COMMA)+ expression_without_struct?)? RPAR
+    | expression_without_struct DOT path_expr_segment LPAR call_params? RPAR
+    | expression_without_struct DOT IDENTIFIER
+    | expression DOT INTEGER_LITERAL
+    | expression_without_struct LBKT expression_without_struct RBKT
+    | expression_without_struct LPAR call_params? RPAR
+// >>>> operator_expression
+    | (AND | ANDAND) expression_without_struct | (AND | ANDAND) MUT expression_without_struct
+    | STAR expression_without_struct
+    | NOT expression_without_struct | MINUS expression_without_struct
+    | expression_without_struct (STAR | SLASH | PERCENT) expression_without_struct
+    | expression_without_struct (PLUS | MINUS) expression_without_struct
+    | expression_without_struct (SHL | SHR) expression_without_struct
+    | expression_without_struct (LT | LE | EQEQ | NE | GE | GT) expression_without_struct
+    | expression_without_struct (AND | CARET | OR) expression_without_struct
+    | expression_without_struct (ANDAND | OROR) expression_without_struct
+    | expression_without_struct DOTDOT expression_without_struct
+    | expression_without_struct AS type
+    | <assoc = right> expression_without_struct (EQ | PLUSEQ | MINUSEQ | STAREQ | SLASHEQ | PERCENTEQ | CARETEQ | ANDEQ | OREQ | SHLEQ | SHREQ) expression_without_struct
+// <<<<
+    | LBKT array_elements? RBKT
+    | CONTINUE
+    | BREAK expression_without_struct?
+    | RETURN expression_without_struct?
+    | literal_expression
+    | path_expression
+    | UNDERSCORE
     | block_expression
     | const_block_expression
     | loop_expression
@@ -97,9 +136,11 @@ expression
 
 expression_without_block
     : LPAR expression RPAR
+    | LPAR ((expression COMMA)+ expression?)? RPAR
 // >>>> operator_expression
     | <assoc = right> expression (EQ | PLUSEQ | MINUSEQ | STAREQ | SLASHEQ | PERCENTEQ | CARETEQ | ANDEQ | OREQ | SHLEQ | SHREQ) expression
     | expression AS type
+    | expression DOTDOT expression
     | expression (ANDAND | OROR) expression
     | expression (AND | CARET | OR) expression
     | expression (LT | LE | EQEQ | NE | GE | GT) expression
@@ -112,16 +153,17 @@ expression_without_block
 // <<<<
     | expression LPAR call_params? RPAR
     | expression LBKT expression RBKT
+    | expression DOT INTEGER_LITERAL
     | expression DOT IDENTIFIER
     | expression DOT path_expr_segment LPAR call_params? RPAR
     | LBKT array_elements? RBKT
     | path_in_expression LBCE struct_expr_fields? RBCE
-    | continue_expression
-    | break_expression
-    | return_expression
+    | CONTINUE
+    | BREAK expression?
+    | RETURN expression?
     | literal_expression
     | path_expression
-    | underscore_expression
+    | UNDERSCORE
     ;
 
 expression_with_block
@@ -142,17 +184,6 @@ literal_expression:
     ; // leaving out C strings
 
 path_expression: path_in_expression ;
-
-operator_expression
-    : borrow_expression
-    | dereference_expression
-    | negation_expression
-    | arithmetic_or_logical_expression
-    | comparison_expression
-    | lazy_boolean_expression
-    | assignment_expression
-    | compound_assignment_expression
-    ;
 
 borrow_expression: (AND | ANDAND) expression | (AND | ANDAND) MUT expression ;
 dereference_expression: STAR expression ;
@@ -196,15 +227,21 @@ infinite_loop_expression: LOOP block_expression ;
 predicate_loop_expression: WHILE conditions block_expression ;
 
 if_expression: IF conditions block_expression (ELSE (if_expression | block_expression))? ;
-conditions: expression ; // leaving out let chains, and no struct restriction
+conditions: expression_without_struct | let_chain ; // leaving out let chains
+
+let_chain: let_chain_condition (ANDAND let_chain_condition)* ;
+let_chain_condition:
+    expression_without_struct
+    | LET pattern EQ scrutinee
+    ;
 
 match_expression: MATCH scrutinee LBCE match_arms? RBCE ;
-scrutinee: expression ; // leacing out no struct restriction
+scrutinee: expression_without_struct;
 match_arms:
     (match_arm FATARROW (expression_without_block COMMA | expression_with_block COMMA?))*
     match_arm FATARROW expression COMMA?
     ;
-match_arm: pattern; // leaving out guard
+match_arm: pattern;
 
 pattern
     : literal_pattern
@@ -217,7 +254,7 @@ pattern
 
 literal_pattern: MINUS? literal_expression ;
 
-identifier_pattern: REF? MUT? IDENTIFIER ; // leaving out @
+identifier_pattern: REF? MUT? IDENTIFIER ;
 
 wildcard_pattern: UNDERSCORE ;
 
@@ -229,13 +266,15 @@ tuple_struct_items: pattern (COMMA pattern)* COMMA? ;
 
 path_pattern: path_in_expression ;
 
-type: type_path | reference_type | array_type | slice_type | inferred_type ;
+type: type_path | reference_type | array_type | slice_type | inferred_type | tuple_type;
 
 reference_type: AND MUT? type ;
 
 array_type: LBKT type SEMI expression RBKT ;
 
 slice_type: LBKT type RBKT ;
+
+tuple_type: LPAR ((type COMMA)+ type?)? RPAR ;
 
 inferred_type: UNDERSCORE ;
 
